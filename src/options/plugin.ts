@@ -9,6 +9,12 @@ const options = {
     describe: 'Enables LiveReload (HMR)',
     default: false,
   },
+  bail: {
+    type: 'boolean' as const,
+    alias: 'b',
+    describe: 'Fails the build when errors are present in webpack result',
+    default: false,
+  },
 };
 
 export default options;

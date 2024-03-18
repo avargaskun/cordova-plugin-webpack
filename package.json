@@ -20,7 +20,7 @@
     "contributors:generate": "all-contributors generate",
     "precommit": "lint-staged",
     "prepare": "npm run build",
-    "build": "rimraf dist/* && tsc && webpack",
+    "build": "rimraf dist/* && tsc && NODE_OPTIONS=--openssl-legacy-provider webpack",
     "lint": "eslint '**/*.{js,ts}'",
     "lint:fix": "npm run lint -- --fix",
     "test": "jest --watch",

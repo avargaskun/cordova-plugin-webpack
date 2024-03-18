@@ -175,7 +175,7 @@ module.exports = async (ctx: Context) => {
     });
   });
 
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     server.listen(port, host, (err) => {
       if (err) {
         reject(err);
