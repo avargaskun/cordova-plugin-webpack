@@ -16,10 +16,10 @@ const injectCordovaScript = (platform: typeof platforms[number]) => {
   console.log(`Injected cordova.js of ${platform} platform.`);
 };
 
-if (!isWebview(navigator.userAgent)) {
-  injectCordovaScript('browser');
-} else if (currentDevice.android()) {
+if (currentDevice.android()) {
   injectCordovaScript('android');
 } else if (currentDevice.ios()) {
   injectCordovaScript('ios');
+} else if (!isWebview(navigator.userAgent)) {
+  injectCordovaScript('browser');
 }
