@@ -20,7 +20,7 @@
     "contributors:generate": "all-contributors generate",
     "precommit": "lint-staged",
     "prepare": "npm run build",
-    "build": "rimraf dist/* && tsc && NODE_OPTIONS=--openssl-legacy-provider webpack",
+    "build": "rimraf dist/* && tsc --skipLibCheck && NODE_OPTIONS=--openssl-legacy-provider webpack",
     "lint": "eslint '**/*.{js,ts}'",
     "lint:fix": "npm run lint -- --fix",
     "test": "jest --watch",
@@ -94,6 +94,7 @@
     "npm-check": "^5.9.2",
     "prettier": "^2.3.2",
     "rimraf": "^3.0.2",
+    "strip-ansi": "6.0.1",
     "ts-jest": "^25.5.1",
     "ts-loader": "^8.3.0",
     "ts-node": "^10.1.0",
@@ -101,6 +102,14 @@
     "webpack": "^4.46.0",
     "webpack-cli": "^3.3.12",
     "webpack-dev-server": "^3.11.2"
+  },
+  "overrides": {
+    "string-width": "4.2.2",
+    "string-width-cjs": "5.1.1",
+    "strip-ansi": "6.0.1",
+    "strip-ansi-cjs": "8.0.0",
+    "wrap-ansi": "8.0.0",
+    "wrap-ansi-cjs": "8.0.0"
   },
   "peerDependencies": {
     "webpack": "^4.0.0",
