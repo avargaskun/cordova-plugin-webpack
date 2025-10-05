@@ -6,7 +6,6 @@ import yargs from 'yargs/yargs';
 import yargsUnparser from 'yargs-unparser';
 import webpack from 'webpack';
 import WebpackDevServer from 'webpack-dev-server';
-import WebpackInjectPlugin from 'webpack-inject-plugin';
 import is from '@sindresorhus/is';
 import express from 'express';
 import createHTML from 'create-html';
@@ -84,15 +83,17 @@ module.exports = async (ctx: Context) => {
   webpackConfig.mode = 'development';
   webpackConfig.plugins = [
     ...(webpackConfig.plugins || []),
-    new WebpackInjectPlugin(() =>
-      fs.readFileSync(path.join(__dirname, 'www/injectCSP.js'), 'utf8'),
-    ),
-    new WebpackInjectPlugin(() =>
-      fs.readFileSync(
+    new webpack.BannerPlugin({
+      banner: fs.readFileSync(path.join(__dirname, 'www/injectCSP.js'), 'utf8'),
+      raw: true,
+    }),
+    new webpack.BannerPlugin({
+      banner: fs.readFileSync(
         path.join(__dirname, 'www/injectCordovaScript.js'),
         'utf8',
       ),
-    ),
+      raw: true,
+    }),
   ];
 
   const serverConfig: WebpackDevServer.Configuration = {
@@ -104,7 +105,7 @@ module.exports = async (ctx: Context) => {
     ...devServerConfig,
     host,
     port,
-    onBeforeSetupMiddleware: (devServer: WebpackDevServer) => {
+    setupMiddlewares: (middlewares, devServer) => {
       if (devServerConfig.onBeforeSetupMiddleware) {
         devServerConfig.onBeforeSetupMiddleware(devServer);
       }
@@ -118,9 +119,10 @@ module.exports = async (ctx: Context) => {
               platform,
               'platform_www',
             ),
-          ),
+          ) as any,
         );
       });
+      return middlewares;
     },
   };
 
