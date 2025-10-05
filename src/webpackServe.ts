@@ -6,7 +6,6 @@ import yargs from 'yargs/yargs';
 import yargsUnparser from 'yargs-unparser';
 import webpack from 'webpack';
 import WebpackDevServer from 'webpack-dev-server';
-import convertArgv from 'webpack-cli/bin/utils/convert-argv';
 import WebpackInjectPlugin from 'webpack-inject-plugin';
 import is from '@sindresorhus/is';
 import express from 'express';
@@ -15,16 +14,21 @@ import { choosePort, prepareUrls } from 'react-dev-utils/WebpackDevServerUtils';
 import { Context } from './types';
 // eslint-disable-next-line import/no-named-as-default
 import options from './options';
-import { defaultHost, defaultPort, createConfig } from './utils/webpackHelpers';
+import { defaultHost, defaultPort } from './utils/webpackHelpers';
 import { createArguments, getVersion } from './utils/yargsHelpers';
 import ConfigParser from './utils/ConfigParser';
+import devServerOptions from './options/devServer';
 
 module.exports = async (ctx: Context) => {
   const platforms = ['browser', 'android', 'ios'] as const;
   const targetPlatforms = platforms.filter((platform) =>
     ctx.opts.platforms!.includes(platform),
   );
-  if (!platforms.some((platform) => ctx.opts.platforms && ctx.opts.platforms.includes(platform))) {
+  if (
+    !platforms.some(
+      (platform) => ctx.opts.platforms && ctx.opts.platforms.includes(platform),
+    )
+  ) {
     return;
   }
 
@@ -52,24 +56,22 @@ module.exports = async (ctx: Context) => {
   );
 
   const webpackArgv = webpackYargs
-    .options(options.webpack) // set webpack yargs options
-    .options(options.devServer) // set webpack-dev-server yargs options
+    .options(webpack.cli.getArguments()) // set webpack yargs options
+    .options(devServerOptions as any) // set webpack-dev-server yargs options
     .version(getVersion()).argv;
 
-  const [customWebpackConfig, customDevServerConfig] = await createConfig(
-    convertArgv(webpackArgv), // create webpack configuration from yargs.argv and webpack.config.js
-    webpackArgv,
-  );
+  const webpackConfig = require(path.resolve(
+    (webpackArgv.config as string) || 'webpack.config.js',
+  ));
 
-  const protocol = customDevServerConfig.https ? 'https' : 'http';
+  const devServerConfig = webpackConfig.devServer || {};
+
+  const protocol = devServerConfig.https ? 'https' : 'http';
   const host =
-    !customDevServerConfig.host || customDevServerConfig.host === 'localhost'
+    !devServerConfig.host || devServerConfig.host === 'localhost'
       ? defaultHost
-      : customDevServerConfig.host;
-  const port = await choosePort(
-    host,
-    customDevServerConfig.port || defaultPort,
-  );
+      : devServerConfig.host;
+  const port = await choosePort(host, devServerConfig.port || defaultPort);
   if (!port) {
     return;
   }
@@ -79,39 +81,35 @@ module.exports = async (ctx: Context) => {
     ios: 'localhost',
   };
 
-  const webpackConfig = ([] as webpack.Configuration[]).concat(
-    customWebpackConfig,
-  );
-  webpackConfig[0] = {
-    ...webpackConfig[0],
-    mode: 'development',
-    plugins: [
-      ...(webpackConfig[0].plugins || []),
-      new WebpackInjectPlugin(() =>
-        fs.readFileSync(path.join(__dirname, 'www/injectCSP.js'), 'utf8'),
+  webpackConfig.mode = 'development';
+  webpackConfig.plugins = [
+    ...(webpackConfig.plugins || []),
+    new WebpackInjectPlugin(() =>
+      fs.readFileSync(path.join(__dirname, 'www/injectCSP.js'), 'utf8'),
+    ),
+    new WebpackInjectPlugin(() =>
+      fs.readFileSync(
+        path.join(__dirname, 'www/injectCordovaScript.js'),
+        'utf8',
       ),
-      new WebpackInjectPlugin(() =>
-        fs.readFileSync(
-          path.join(__dirname, 'www/injectCordovaScript.js'),
-          'utf8',
-        ),
-      ),
-    ],
-  };
-  const devServerConfig: WebpackDevServer.Configuration = {
-    contentBase: path.join(ctx.opts.projectRoot, 'www'),
+    ),
+  ];
+
+  const serverConfig: WebpackDevServer.Configuration = {
+    static: {
+      directory: path.join(ctx.opts.projectRoot, 'www'),
+    },
     historyApiFallback: true,
-    watchContentBase: true,
     hot: true,
-    ...customDevServerConfig,
+    ...devServerConfig,
     host,
     port,
-    before: (app, server, compiler) => {
-      if (customDevServerConfig.before) {
-        customDevServerConfig.before(app, server, compiler);
+    onBeforeSetupMiddleware: (devServer: WebpackDevServer) => {
+      if (devServerConfig.onBeforeSetupMiddleware) {
+        devServerConfig.onBeforeSetupMiddleware(devServer);
       }
       targetPlatforms.forEach((platform) => {
-        app.use(
+        devServer.app!.use(
           `/${platform}`,
           express.static(
             path.join(
@@ -125,10 +123,6 @@ module.exports = async (ctx: Context) => {
       });
     },
   };
-
-  // HMR
-  if (devServerConfig.hot)
-    WebpackDevServer.addDevServerEntrypoints(webpackConfig, devServerConfig);
 
   targetPlatforms.forEach((platform) => {
     if (platform === 'browser') {
@@ -165,23 +159,16 @@ module.exports = async (ctx: Context) => {
   });
 
   const compiler = webpack(webpackConfig);
-  const server = new WebpackDevServer(compiler, devServerConfig);
+  const server = new WebpackDevServer(serverConfig, compiler as any);
 
   const signals = ['SIGINT', 'SIGTERM'] as const;
   signals.forEach((signal) => {
     process.on(signal, () => {
-      server.close();
+      server.stop();
       process.exit();
     });
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.listen(port, host, (err) => {
-      if (err) {
-        reject(err);
-      }
-      console.log('Starting the development server...\n');
-      resolve();
-    });
-  });
+  await server.start();
+  console.log('Starting the development server...\n');
 };

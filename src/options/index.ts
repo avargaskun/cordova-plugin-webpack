@@ -1,7 +1,5 @@
 import plugin from './plugin';
-import webpack from './webpack';
-import devServer from './devServer';
 
-export const options = { plugin, webpack, devServer };
+export const options = { plugin };
 
 export default options;
