@@ -1,20 +1,19 @@
-import Policy from 'csp-parse';
-
-const defaultPolicyStr =
-  'default-src "self" data: gap: https://ssl.gstatic.com "unsafe-eval"; style-src "self" "unsafe-inline"; media-src *; img-src "self" data: content:;';
+// Remove any existing CSP meta tag and replace with a permissive one for dev server mode.
 const existingPolicyEl = document.querySelector<HTMLMetaElement>(
   'meta[http-equiv="Content-Security-Policy"]',
 );
-const exstingPolicyStr =
-  existingPolicyEl && existingPolicyEl.getAttribute('content');
 if (existingPolicyEl) existingPolicyEl.remove();
 
 const policyEl = document.createElement('meta');
 policyEl.setAttribute('http-equiv', 'Content-Security-Policy');
-policyEl.setAttribute('content', exstingPolicyStr || defaultPolicyStr);
-const policy = new Policy(policyEl.getAttribute('content') as string);
-policy.add('default-src', '*');
-policyEl.setAttribute('content', policy.toString());
+const policy =
+  "default-src * 'self' 'unsafe-inline' 'unsafe-eval' data: gap: ionic: ws: wss: blob:;" +
+  " style-src * 'self' 'unsafe-inline';" +
+  " script-src * 'self' 'unsafe-inline' 'unsafe-eval';" +
+  " img-src * 'self' data: blob: ionic:;" +
+  " connect-src * 'self' ws: wss:;" +
+  " font-src * 'self' data:;";
+policyEl.setAttribute('content', policy);
 document.head.appendChild(policyEl);
 
-console.log('Set Content Security Policy:', policy.toString());
+console.log('Set Content Security Policy:', policy);

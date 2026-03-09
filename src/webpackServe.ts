@@ -16,7 +16,6 @@ import options from './options';
 import { defaultHost, defaultPort } from './utils/webpackHelpers';
 import { createArguments, getVersion } from './utils/yargsHelpers';
 import ConfigParser from './utils/ConfigParser';
-import devServerOptions from './options/devServer';
 
 module.exports = async (ctx: Context) => {
   const platforms = ['browser', 'android', 'ios'] as const;
@@ -56,7 +55,6 @@ module.exports = async (ctx: Context) => {
 
   const webpackArgv = webpackYargs
     .options(webpack.cli.getArguments()) // set webpack yargs options
-    .options(devServerOptions as any) // set webpack-dev-server yargs options
     .version(getVersion()).argv;
 
   const webpackConfig = require(path.resolve(
@@ -65,7 +63,17 @@ module.exports = async (ctx: Context) => {
 
   const devServerConfig = webpackConfig.devServer || {};
 
-  const protocol = devServerConfig.https ? 'https' : 'http';
+  // Strip v3/v4-only properties that are invalid in webpack-dev-server v5
+  const {
+    before: _before,
+    after: _after,
+    https: _https,
+    onBeforeSetupMiddleware: _onBefore,
+    onAfterSetupMiddleware: _onAfter,
+    ...cleanDevServerConfig
+  } = devServerConfig;
+
+  const protocol = (devServerConfig.server === 'https' || devServerConfig.https) ? 'https' : 'http';
   const host =
     !devServerConfig.host || devServerConfig.host === 'localhost'
       ? defaultHost
@@ -96,18 +104,29 @@ module.exports = async (ctx: Context) => {
     }),
   ];
 
+  const projectSetupMiddlewares = cleanDevServerConfig.setupMiddlewares;
+
   const serverConfig: WebpackDevServer.Configuration = {
     static: {
       directory: path.join(ctx.opts.projectRoot, 'www'),
     },
     historyApiFallback: true,
     hot: true,
-    ...devServerConfig,
+    ...cleanDevServerConfig,
     host,
     port,
+    client: {
+      ...(cleanDevServerConfig.client || {}),
+      overlay: {
+        errors: true,
+        runtimeErrors: false,
+        warnings: false,
+      },
+    },
     setupMiddlewares: (middlewares, devServer) => {
-      if (devServerConfig.onBeforeSetupMiddleware) {
-        devServerConfig.onBeforeSetupMiddleware(devServer);
+      // Call the project's setupMiddlewares first if defined
+      if (projectSetupMiddlewares) {
+        middlewares = projectSetupMiddlewares(middlewares, devServer);
       }
       targetPlatforms.forEach((platform) => {
         devServer.app!.use(
@@ -173,4 +192,17 @@ module.exports = async (ctx: Context) => {
 
   await server.start();
   console.log('Starting the development server...\n');
+
+  // Prevent cordova-ios (and other platforms) from killing the process after
+  // deploying the app. cordova-ios/lib/run.js calls process.exit(0) once the
+  // simulator launches, which would tear down the dev server. We intercept
+  // that call and keep the server alive instead.
+  const realExit = process.exit;
+  process.exit = ((code?: number) => {
+    if (code === 0) {
+      console.log('[cordova-plugin-webpack] Intercepted process.exit — keeping dev server alive.\n');
+      return undefined as never;
+    }
+    return realExit(code);
+  }) as typeof process.exit;
 };
